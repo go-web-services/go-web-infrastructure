@@ -1,4 +1,6 @@
-# go-web-infrastructure
+Visit main page: [https://github.com/go-web-services](https://github.com/go-web-services)
+
+# Go Web Services - go-web-infrastructure
 
 Shared Docker-oriented infrastructure for Go Web stacks: nginx reverse proxy configs and an observability bundle (Grafana, Loki, Alloy for Docker logs).
 
