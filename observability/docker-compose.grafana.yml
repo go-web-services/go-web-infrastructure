@@ -1,0 +1,78 @@
+# Observability: Grafana + Loki + Alloy (Docker log collection).
+# Expects the same external network as the app compose files (`go-network`).
+# Top-level env_file loads the repo-root `.env` for ${VAR} interpolation only (Compose 2.24+);
+# it does not mount that file into containers. From repo root:
+#   docker compose -f observability/docker-compose.yml up -d
+#
+# Local: Grafana http://localhost:${GRAFANA_PORT:-4001}, Alloy UI :${ALLOY_UI_PORT:-4002}
+#
+# Production (nginx in go-web-infrastructure/proxy): attach stacks to the same Docker network as this
+# stack, proxy to http://lmk-obs-grafana:3000, and set GF_SERVER_ROOT_URL to the public URL
+# (scheme + host + optional path). If Grafana is served under a subpath, set
+# GF_SERVER_SERVE_FROM_SUB_PATH=true and include that path in GF_SERVER_ROOT_URL.
+
+services:
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: lmk-obs-loki
+    environment:
+      LOKI_LOG_RETENTION_DAYS: ${LOKI_LOG_RETENTION_DAYS:-7}
+    command:
+      - -config.file=/etc/loki/config.yaml
+      - -config.expand-env=true
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - go-network
+    env_file:
+      - ../.env
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.7.5
+    container_name: lmk-obs-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "${ALLOY_UI_PORT:-4002}:12345"
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    networks:
+      - go-network
+    depends_on:
+      - loki
+    env_file:
+      - ../.env
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: lmk-obs-grafana
+    env_file:
+      - ../.env
+    ports:
+      - "${GRAFANA_PORT:-4001}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - go-network
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  loki-data:
+  alloy-data:
+  grafana-data:
+
+networks:
+  go-network:
+    external: true

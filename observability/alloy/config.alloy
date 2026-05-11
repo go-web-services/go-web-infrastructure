@@ -1,0 +1,43 @@
+// Collects Docker container logs for containers attached to the filtered network and ships them to Loki.
+// To scrape every container on the Docker host, remove the `filter` block inside `discovery.docker`.
+// Each stream gets a `service` label from the container name (matches `container_name` in compose or generated name).
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+discovery.docker "docker" {
+	host = "unix:///var/run/docker.sock"
+
+	filter {
+		name   = "network"
+		values = ["go-network"]
+	}
+}
+
+discovery.relabel "docker_service" {
+	targets = discovery.docker.docker.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?(.*)"
+		target_label  = "service"
+		replacement   = "$1"
+		action        = "replace"
+	}
+}
+
+loki.source.docker "logs" {
+	host             = "unix:///var/run/docker.sock"
+	targets          = discovery.relabel.docker_service.output
+	labels           = {"job" = "docker"}
+	forward_to       = [loki.write.default.receiver]
+	refresh_interval = "15s"
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}

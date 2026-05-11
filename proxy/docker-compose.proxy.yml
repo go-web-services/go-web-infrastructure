@@ -1,0 +1,22 @@
+# Nginx reverse proxy: TLS uses ephemeral self-signed certs from the image unless you bind-mount PEMs.
+# Run from this repo root after app stacks join external network `go-network`:
+#   docker compose -f docker-compose.proxy.yml up -d --build
+#
+# Optional volumes (same paths as in the image):
+#   - /path/server.crt:/etc/nginx/certs/server.crt:ro
+#   - /path/server.key:/etc/nginx/certs/server.key:ro
+services:
+  proxy:
+    container_name: proxy
+    restart: unless-stopped
+    build:
+      context: ./proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - go-network
+
+networks:
+  go-network:
+    external: true
